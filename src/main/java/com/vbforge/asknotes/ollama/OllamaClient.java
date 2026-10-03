@@ -25,6 +25,14 @@ import java.util.Map;
  */
 
 
+/**
+ * What been changed:
+ * chat behaves exactly as before. Only the HTTP plumbing moved into post.
+ * embed(List<String>) is the batch call. One HTTP request embeds many chunks, which matters on a CPU where per-request overhead adds up. The ingestion service will send batches of around 16 chunks, so one slow request stays well inside the 90s read timeout.
+ * embed(String) is a convenience for one text. Stage 3 will use it for the question.
+ * Every vector is checked against embeddingDimensions before anything reaches the database.
+ * */
+
 @Component
 public class OllamaClient {
 
@@ -47,56 +55,80 @@ public class OllamaClient {
         var request = new OllamaChat.Request(
                 props.chatModel(),
                 messages,
-                false,
+                false,                          // one complete JSON reply, no token stream
                 format,
-                Map.of("temperature", 0)
+                Map.of("temperature", 0)        // deterministic-ish: same question, same answer
         );
 
-        OllamaChat.Response response;
+        OllamaChat.Response response = post("/api/chat", request, OllamaChat.Response.class, props.chatModel());
 
+        if (response == null || response.message() == null || response.message().content() == null) {
+            throw new OllamaException(OllamaException.Kind.BAD_RESPONSE, "Ollama returned an empty response");
+        }
+        if ("length".equals(response.doneReason())) {
+            throw new OllamaException(OllamaException.Kind.BAD_RESPONSE,
+                    "Ollama output was cut off before it finished");
+        }
+        return response;
+    }
+
+    /** Embeds a batch of texts; the returned list has one vector per input, in order. */
+    public List<float[]> embed(List<String> inputs) {
+        if (inputs.isEmpty()) {
+            return List.of();
+        }
+        var request = new OllamaEmbed.Request(props.embeddingModel(), inputs, false);
+
+        OllamaEmbed.Response response =
+                post("/api/embed", request, OllamaEmbed.Response.class, props.embeddingModel());
+
+        if (response == null || response.embeddings() == null
+                || response.embeddings().size() != inputs.size()) {
+            throw new OllamaException(OllamaException.Kind.BAD_RESPONSE,
+                    "Ollama returned a wrong number of embeddings");
+        }
+        for (float[] vector : response.embeddings()) {
+            if (vector == null || vector.length != props.embeddingDimensions()) {
+                throw new OllamaException(OllamaException.Kind.BAD_RESPONSE,
+                        "Embedding has " + (vector == null ? 0 : vector.length) + " dimensions, expected "
+                                + props.embeddingDimensions() + " (model '" + props.embeddingModel() + "')");
+            }
+        }
+        return response.embeddings();
+    }
+
+    public float[] embed(String input) {
+        return embed(List.of(input)).get(0);
+    }
+
+    private <T> T post(String uri, Object body, Class<T> type, String model) {
         try {
-            response = restClient.post()
-                    .uri("/api/chat")
+            return restClient.post()
+                    .uri(uri)
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(request)
+                    .body(body)
                     .retrieve()
-                    .body(OllamaChat.Response.class);
-
+                    .body(type);
         } catch (ResourceAccessException e) {
-            if(hasCause(e, HttpTimeoutException.class)) {
-                log.warn("Ollama call timed out after {}", props.readTimeout());
+            if (hasCause(e, HttpTimeoutException.class)) {
+                log.warn("Ollama call {} timed out after {}", uri, props.readTimeout());
                 throw new OllamaException(OllamaException.Kind.TIMEOUT,
                         "Ollama did not answer within " + props.readTimeout(), e);
             }
             log.warn("Ollama not reachable at {}: {}", props.baseUrl(), e.getMessage());
             throw new OllamaException(OllamaException.Kind.UNAVAILABLE,
                     "Ollama is not reachable at " + props.baseUrl(), e);
-
         } catch (RestClientResponseException e) {
             int status = e.getStatusCode().value();
-            String hintAdvice = status == 404 ? " (is the model '" + props.chatModel() + "' pulled?)" : "";
-            log.warn("Ollama returned HTTP status {}: {}", status, e.getResponseBodyAsString());
+            String hint = status == 404 ? " (is the model '" + model + "' pulled?)" : "";
+            log.warn("Ollama {} returned HTTP {}: {}", uri, status, e.getResponseBodyAsString());
             throw new OllamaException(OllamaException.Kind.BAD_RESPONSE,
-                    "Ollama returned HTTP " + status + hintAdvice, e);
-
+                    "Ollama returned HTTP " + status + hint, e);
         }
-
-        if(response == null || response.message() == null || response.message().content() == null){
-            throw new OllamaException(OllamaException.Kind.BAD_RESPONSE, "Ollama returned an empty response");
-        }
-        if("length".equals(response.doneReason())){
-            throw new OllamaException(OllamaException.Kind.BAD_RESPONSE,
-                    "Ollama output was cut off before it finished");
-        }
-
-        return response;
-
-
     }
 
-
-    private static boolean hasCause(Throwable throwable, Class<? extends Throwable> type) {
-        for (Throwable c = throwable; c != null; c = c.getCause()) {
+    private static boolean hasCause(Throwable t, Class<? extends Throwable> type) {
+        for (Throwable c = t; c != null; c = c.getCause()) {
             if (type.isInstance(c)) {
                 return true;
             }

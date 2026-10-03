@@ -9,5 +9,7 @@ spring:
 ollama:
   base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
   chat-model: llama3.2:3b
+  embedding-model: nomic-embed-text
+  embedding-dimensions: 768
   connect-timeout: 2s
-  read-timeout: 90s
+  read-timeout: 90
