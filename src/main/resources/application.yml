@@ -13,3 +13,6 @@ ollama:
   embedding-dimensions: 768
   connect-timeout: 2s
   read-timeout: 90
+
+notes:
+  directory: ${NOTES_DIRECTORY:./notes}
