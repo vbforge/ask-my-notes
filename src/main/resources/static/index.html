@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ask My Notes</title>
+    <style>
+        :root { --bg:#fafafa; --fg:#1c1c1e; --card:#fff; --muted:#6b6b70; --line:#e2e2e6; --accent:#2f6fed;
+            --low:#c0392b; --medium:#b9770e; --high:#1e8449; }
+        @media (prefers-color-scheme: dark) {
+            :root { --bg:#16161a; --fg:#ececf0; --card:#202026; --muted:#9a9aa3; --line:#34343c; --accent:#6d9bff;
+                --low:#ff7b6b; --medium:#e6b04c; --high:#5fd08a; }
+        }
+        * { box-sizing: border-box; }
+        body { margin:0; background:var(--bg); color:var(--fg);
+            font:16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+        main { max-width:760px; margin:0 auto; padding:2rem 1rem 4rem; }
+        h1 { font-size:1.5rem; margin:0 0 .25rem; }
+        .sub { color:var(--muted); margin:0 0 1.5rem; }
+        textarea { width:100%; min-height:110px; padding:.75rem; font:inherit; color:inherit;
+            background:var(--card); border:1px solid var(--line); border-radius:8px; resize:vertical; }
+        textarea:focus { outline:2px solid var(--accent); outline-offset:1px; }
+        .row { display:flex; align-items:center; gap:1rem; margin-top:.75rem; }
+        button { font:inherit; padding:.55rem 1.2rem; border:0; border-radius:8px; cursor:pointer;
+            background:var(--accent); color:#fff; }
+        button:disabled { opacity:.55; cursor:wait; }
+        #status { color:var(--muted); font-size:.9rem; }
+        .card { background:var(--card); border:1px solid var(--line); border-radius:8px;
+            padding:1rem 1.25rem; margin-top:1.5rem; }
+        .card[hidden] { display:none; }
+        .badge { display:inline-block; font-size:.75rem; font-weight:600; text-transform:uppercase;
+            letter-spacing:.04em; padding:.1rem .5rem; border-radius:999px; border:1px solid currentColor; }
+        .low { color:var(--low); } .medium { color:var(--medium); } .high { color:var(--high); }
+        #answer { white-space:pre-wrap; margin:.75rem 0 0; }
+        #sources { margin:.75rem 0 0; padding-left:1.2rem; color:var(--muted); font-size:.9rem; }
+        .error { border-color:var(--low); color:var(--low); }
+    </style>
+</head>
+<body>
+<main>
+    <h1>Ask My Notes</h1>
+    <p class="sub">Local RAG over my Markdown notes. Ctrl+Enter to send.</p>
+
+    <textarea id="question" placeholder="Ask something..." autofocus></textarea>
+    <div class="row">
+        <button id="ask">Ask</button>
+        <span id="status"></span>
+    </div>
+
+    <section id="result" class="card" hidden>
+        <span id="badge" class="badge"></span>
+        <p id="answer"></p>
+        <ul id="sources" hidden></ul>
+    </section>
+</main>
+
+<script>
+    const $ = (id) => document.getElementById(id);
+    const btn = $('ask'), status = $('status'), result = $('result');
+    let timer;
+
+    async function ask() {
+        const question = $('question').value.trim();
+        if (!question) return;
+
+        btn.disabled = true;
+        result.hidden = true;
+        result.classList.remove('error');
+        const started = Date.now();
+        status.textContent = 'Thinking... 0s';
+        timer = setInterval(() => {
+            status.textContent = `Thinking... ${Math.round((Date.now() - started) / 1000)}s`;
+        }, 500);
+
+        try {
+            const res = await fetch('/ask', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question })
+            });
+            const body = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error(body.detail || body.error || `HTTP ${res.status}`);
+            render(body);
+        } catch (e) {
+            renderError(e.message);
+        } finally {
+            clearInterval(timer);
+            status.textContent = `Done in ${((Date.now() - started) / 1000).toFixed(1)}s`;
+            btn.disabled = false;
+        }
+    }
+
+    function render(data) {
+        const badge = $('badge');
+        badge.textContent = data.confidence ? `${data.confidence} confidence` : '';
+        badge.className = 'badge ' + (data.confidence || '');
+        badge.hidden = !data.confidence;
+        $('answer').textContent = data.answer ?? '';
+
+        const list = $('sources');
+        list.replaceChildren();
+        (data.sources || []).forEach((s) => {
+            const li = document.createElement('li');
+            li.textContent = s.heading ? `${s.file} › ${s.heading}` : s.file;
+            list.appendChild(li);
+        });
+        list.hidden = !list.children.length;
+        result.hidden = false;
+    }
+
+    function renderError(message) {
+        $('badge').hidden = true;
+        $('sources').hidden = true;
+        $('answer').textContent = message;
+        result.classList.add('error');
+        result.hidden = false;
+    }
+
+    btn.addEventListener('click', ask);
+    $('question').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) ask();
+    });
+</script>
+</body>
+</html>
