@@ -13,6 +13,24 @@ services:
       retries: 5
     restart: unless-stopped
 
+  postgres:
+    image: pgvector/pgvector:0.8.2-pg17
+    container_name: ask-my-notes-postgres
+    environment:
+      POSTGRES_DB: asknotes
+      POSTGRES_USER: asknotes
+      POSTGRES_PASSWORD: asknotes      # local dev only
+    ports:
+      - "5433:5432"                    # host 5433 so it won't clash with a local Postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U asknotes -d asknotes"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
   app:
     build: .
     container_name: ask-my-notes-app
@@ -20,9 +38,13 @@ services:
       - "8080:8080"
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
+      DB_URL: jdbc:postgresql://postgres:5432/asknotes
     depends_on:
       ollama:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
 
 volumes:
   ollama-models:
+  pgdata:

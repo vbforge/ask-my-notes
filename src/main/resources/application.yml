@@ -1,6 +1,10 @@
 spring:
   application:
     name: ask-my-notes
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/asknotes}
+    username: ${DB_USER:asknotes}
+    password: ${DB_PASSWORD:asknotes}
 
 ollama:
   base-url: ${OLLAMA_BASE_URL:http://localhost:11434}
