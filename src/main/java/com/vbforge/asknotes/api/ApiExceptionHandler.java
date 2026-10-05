@@ -8,6 +8,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import com.vbforge.asknotes.ingest.IngestionException;
 
 /**
   **Why:**
@@ -46,6 +47,15 @@ public class ApiExceptionHandler {
             case UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;   // 503
             case TIMEOUT -> HttpStatus.GATEWAY_TIMEOUT;           // 504
             case BAD_RESPONSE -> HttpStatus.BAD_GATEWAY;          // 502
+        };
+        return ProblemDetail.forStatusAndDetail(status, e.getMessage());
+    }
+
+    @ExceptionHandler(IngestionException.class)
+    ProblemDetail handleIngestion(IngestionException e) {
+        HttpStatus status = switch (e.kind()) {
+            case ALREADY_RUNNING -> HttpStatus.CONFLICT;                      // 409
+            case NOTES_DIRECTORY_MISSING -> HttpStatus.INTERNAL_SERVER_ERROR; // 500: server misconfiguration
         };
         return ProblemDetail.forStatusAndDetail(status, e.getMessage());
     }

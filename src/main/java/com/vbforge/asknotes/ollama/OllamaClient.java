@@ -73,7 +73,7 @@ public class OllamaClient {
     }
 
     /** Embeds a batch of texts; the returned list has one vector per input, in order. */
-    public List<float[]> embed(List<String> inputs) {
+    private List<float[]> embedRaw(List<String> inputs) {
         if (inputs.isEmpty()) {
             return List.of();
         }
@@ -97,9 +97,19 @@ public class OllamaClient {
         return response.embeddings();
     }
 
-    public float[] embed(String input) {
-        return embed(List.of(input)).get(0);
+    /** Embeds text that will be stored and searched later (chunks). Adds the document prefix. */
+    public List<float[]> embedDocuments(List<String> texts) {
+        return embedRaw(texts.stream().map(t -> props.documentPrefix() + t).toList());
     }
+
+    /** Embeds a user question for searching. Adds the query prefix. */
+    public float[] embedQuery(String question) {
+        return embedRaw(List.of(props.queryPrefix() + question)).get(0);
+    }
+
+    /*public float[] embed(String input) {
+        return embed(List.of(input)).get(0);
+    }*/
 
     private <T> T post(String uri, Object body, Class<T> type, String model) {
         try {

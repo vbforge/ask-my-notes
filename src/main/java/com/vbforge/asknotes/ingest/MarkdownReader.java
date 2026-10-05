@@ -28,7 +28,9 @@ public class MarkdownReader {
 
     public List<NoteFile> readAll() {
         if (!Files.isDirectory(root)) {
-            throw new IllegalStateException("Notes directory does not exist: " + root);
+            //throw new IllegalStateException("Notes directory does not exist: " + root);
+            throw new IngestionException(IngestionException.Kind.NOTES_DIRECTORY_MISSING,
+                    "Notes directory does not exist: " + root);
         }
         try (Stream<Path> paths = Files.walk(root)) {
             return paths

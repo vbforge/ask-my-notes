@@ -12,7 +12,9 @@ ollama:
   embedding-model: nomic-embed-text
   embedding-dimensions: 768
   connect-timeout: 2s
-  read-timeout: 90
+  read-timeout: 90s
+  document-prefix: "search_document: "
+  query-prefix: "search_query: "
 
 notes:
   directory: ${NOTES_DIRECTORY:./notes}

@@ -1,5 +1,6 @@
 package com.vbforge.asknotes.config;
 
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -21,9 +22,17 @@ public record OllamaProperties(
         @NotBlank String chatModel,
         @NotBlank String embeddingModel,
         @Positive int embeddingDimensions,
+        @NotNull String documentPrefix,     // may be empty for models that need no prefix
+        @NotNull String queryPrefix,
         @NotNull Duration connectTimeout,
         @NotNull Duration readTimeout
 ) {
+
+    @AssertTrue(message = "ollama.read-timeout must be at least 1s (a bare number means milliseconds, write e.g. 90s)")
+    public boolean isReadTimeoutReasonable() {
+        return readTimeout == null || readTimeout.compareTo(Duration.ofSeconds(1)) >= 0;
+    }
+
 }
 
 
