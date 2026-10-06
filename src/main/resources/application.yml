@@ -19,3 +19,6 @@ ollama:
 notes:
   directory: ${NOTES_DIRECTORY:./notes}
   chunk-max-chars: 1500
+
+retrieval:
+  top-k: 4

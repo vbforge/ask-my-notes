@@ -74,6 +74,24 @@ public class ChunkRepository {
         return n == null ? 0 : n;
     }
 
+    /** The k chunks closest to the query vector by cosine distance, nearest first. */
+    public List<ScoredChunk> findNearest(float[] queryVector, int k) {
+        return jdbc.query("""
+                        SELECT source_file, heading, chunk_index, content,
+                               embedding <=> CAST(? AS vector) AS distance
+                        FROM chunk
+                        ORDER BY distance, source_file, chunk_index
+                        LIMIT ?
+                        """,
+                (rs, rowNum) -> new ScoredChunk(
+                        rs.getString("source_file"),
+                        rs.getString("heading"),
+                        rs.getInt("chunk_index"),
+                        rs.getString("content"),
+                        rs.getDouble("distance")),
+                toVectorLiteral(queryVector), k);
+    }
+
     /** pgvector's text format: [0.1,0.2,0.3]. We send it as a string and CAST in SQL. */
     static String toVectorLiteral(float[] vector) {
         StringBuilder sb = new StringBuilder(vector.length * 10).append('[');

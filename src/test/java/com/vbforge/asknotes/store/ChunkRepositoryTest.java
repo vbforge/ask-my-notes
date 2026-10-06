@@ -123,6 +123,29 @@ class ChunkRepositoryTest {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    @Test
+    void findNearest_ordersByCosineDistance_andHonorsK() {
+        repository.replaceFile("a.md",
+                List.of(chunk("a.md", "", 0, "alpha"), chunk("a.md", "", 1, "beta"), chunk("a.md", "", 2, "gamma")),
+                List.of(unit(10), unit(20), unit(30)));
+
+        float[] query = unit(20);
+        query[10] = 0.2f;        // mostly "beta", slightly "alpha", nothing of "gamma"
+
+        List<ScoredChunk> hits = repository.findNearest(query, 3);
+
+        assertThat(hits).extracting(ScoredChunk::content).containsExactly("beta", "alpha", "gamma");
+        assertThat(hits.get(0).distance()).isCloseTo(0.0194, org.assertj.core.api.Assertions.within(0.001));
+        assertThat(hits.get(1).distance()).isCloseTo(0.804, org.assertj.core.api.Assertions.within(0.001));
+        assertThat(hits.get(2).distance()).isCloseTo(1.0, org.assertj.core.api.Assertions.within(0.001));
+        assertThat(repository.findNearest(query, 2)).hasSize(2);
+    }
+
+    @Test
+    void findNearest_onEmptyTable_returnsNothing() {
+        assertThat(repository.findNearest(unit(0), 4)).isEmpty();
+    }
+
     private List<String> contents(String file) {
         return jdbc.queryForList(
                 "SELECT content FROM chunk WHERE source_file = ? ORDER BY chunk_index", String.class, file);
