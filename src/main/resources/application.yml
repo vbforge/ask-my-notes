@@ -13,6 +13,7 @@ ollama:
   embedding-dimensions: 768
   connect-timeout: 2s
   read-timeout: 90s
+  chat-num-ctx: 4096
   document-prefix: "search_document: "
   query-prefix: "search_query: "
 

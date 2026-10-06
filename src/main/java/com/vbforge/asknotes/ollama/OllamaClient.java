@@ -57,7 +57,10 @@ public class OllamaClient {
                 messages,
                 false,                          // one complete JSON reply, no token stream
                 format,
-                Map.of("temperature", 0)        // deterministic-ish: same question, same answer
+                Map.of(
+                        "temperature", 0,                   // deterministic-ish: same question, same answer
+                        "num_ctx", props.chatNumCtx()       // explicit context window, so long prompts are not silently truncated
+                )
         );
 
         OllamaChat.Response response = post("/api/chat", request, OllamaChat.Response.class, props.chatModel());
